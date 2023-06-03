@@ -1,10 +1,5 @@
-package exe.ex3;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
 
 /**
  * This class represents a 2D map as a "screen" or a raster matrix or maze over integers.
@@ -41,16 +36,16 @@ public class Map implements Map2D {
 	}
 	@Override
 	public void init(int w, int h, int v) {
-		_map = new int[h][w];
-		for (int i = 0; i < h; i++) {// rows
-			for (int j = 0; j < w; j++) {//columns
+		_map = new int[w][h];
+		for (int i = 0; i < w; i++) {// rows
+			for (int j = 0; j < h; j++) {//columns
 				_map[i][j] = v;
 			}
 		}
 	}
 	@Override
 	public void init(int[][] arr) {
-		if(arr==null) {// checks if the arr parameter is null
+		if(arr==null) {// checks if the array null
 			throw new RuntimeException();
 		}
 		int h = arr.length;
@@ -64,31 +59,29 @@ public class Map implements Map2D {
 	public int[][] getMap() {
 		int[][] ans = new int[_map.length][_map[0].length];
 		for (int i = 0; i < _map.length; i++) {
-			System.arraycopy(_map[i], 0, ans[i], 0, _map[0].length);// to copy the elements from each row of _map
+			for (int j = 0; j < _map[0].length; j++) {
+				ans[i][j] = this._map[i][j];
+			}
+
 		}
+
 		return ans;
 	}
-
 	@Override
 	public int getWidth() {
-
 		return _map.length ;
 	}
 	@Override
 
 	public int getHeight() {
-		if (_map.length == 0) {// checks if the _map array is empty (has a length of 0)
-			return 0;
-		}else {
-
-		}
 		return _map[0].length;
 	}
 	@Override
 
-	public int getPixel(int x, int y) { 
-		 return _map[x][y];
+	public int getPixel(int x, int y) {
+		return _map[x][y];
 	}
+
 	@Override
 
 	public int getPixel(Pixel2D p) {
@@ -101,11 +94,12 @@ public class Map implements Map2D {
 	}
 	@Override
 
-	public void setPixel(Pixel2D p, int v) {	
+	public void setPixel(Pixel2D p, int v) {
 		this.setPixel(p.getX(), p.getY(),v);
 	}
+
 	@Override
-	/** 
+	/**
 	 * Fills this map with the new color (new_v) starting from p.
 	 * https://en.wikipedia.org/wiki/Flood_fill
 	 */
@@ -130,7 +124,7 @@ public class Map implements Map2D {
 		setPixel(p, new_v); // Set the pixel color to the new color
 		int counter = 1; // Counter to count the current pixel as filled
 
-		Pixel2D[] neighbors = getNeighbors(p); // Get the neighboring pixels
+		Pixel2D[] neighbors = findTheNeighbors(p); // Get the neighboring pixels
 
 		for (int i = 0; i < neighbors.length; i++) {
 			Pixel2D neighbor = neighbors[i];
@@ -145,94 +139,66 @@ public class Map implements Map2D {
 	 * https://en.wikipedia.org/wiki/Breadth-first_search
 	 */
 	public Pixel2D[] shortestPath(Pixel2D p1, Pixel2D p2, int obsColor) {
-		// Check if p1 or p2 are outside the boundaries or null,or euqals 
-		if(p1==null||p2==null||!isInside(p1)||!isInside(p2)) {
+		Pixel2D[] ans = null;  // the result.
+
+		// Create a sorted map of distances from p1 to all other pixels
+		Map2D sort_map = this.allDistance(p1, obsColor);
+
+		// Get the target point value from the sorted map
+		int target_point = sort_map.getPixel(p2);
+
+		//check if the target point is an obstacle
+		if ((target_point == -1) || (target_point == -2)){
 			return null;
 		}
-		Pixel2D[] ans = null;  // initialize our result to be null 
+		int width = this.getWidth();
+		int heigth = this.getHeight();
 
-		//Create an ArrayList to keep tracking the visited pixels.
-		List <Pixel2D> track= new ArrayList<Pixel2D>(); 
+		ans = new Index2D[target_point + 1];
 
-		// Create a 2D array to store the origin of each pixel in the shortest path
-		Pixel2D[][] origin=  new Pixel2D[getWidth()][getHeight()];
 
-		// Create a 2D boolean array to sign the visited pixels
-		boolean[][] visited = new boolean[getHeight()][getWidth()];
+		// Use a queue to BFS search from the target to the start point
+		Queue<Pixel2D> start_point = new LinkedList<Pixel2D>();
 
-		// Add the start pixel (p1) to the track  
-		track.add(p1);
-		visited[p1.getX()][p1.getY()] = true;
+		start_point.add(p2);
+		ans[target_point] = p2;
+		while (!start_point.isEmpty()) {
 
-		//find the shortest path
-		while (!track.isEmpty()) {
-			/*removes and retrieves the first element from the track ArrayList and assigns it to the variable.
-			 * and selecting the next pixel to be processed in the breadth-first search (BFS) algorithm.
-			 */
-			Pixel2D current_pixel = track.remove(0);
+			Pixel2D current = start_point.remove();
 
-			// Check if we have reached pixel (p2)
-			if (current_pixel.equals(p2)) {
+			// If the current pixel is the start pixel, break the loop
+			if (current.equals(p1)) {
 				break;
 			}
-			// Get the neighbors of the current pixel
-			Pixel2D[] neigh = getNeighbors(current_pixel);
 
-			// Iterate through the neighbors and add them to the track if they are valid moves
-			for (int i = 0; i < neigh.length; i++) {
-				Pixel2D neighbors = neigh[i];
+			// Get the neighbors of the current point
+			Pixel2D[] neighbors = findTheNeighbors(current);
 
-				if (validMove(current_pixel, neighbors, obsColor) && !visited[neighbors.getX()][neighbors.getY()]) {
-					track.add(neighbors);
-					visited[neighbors.getX()][neighbors.getY()] = true;
-					origin[neighbors.getX()][neighbors.getY()] = current_pixel;
+			for (Pixel2D neighbor : neighbors) {
+				if ((this.isCyclic() || isInside(neighbor)) && sort_map.getPixel(neighbor) == sort_map.getPixel(current) - 1) {
+					start_point.add(neighbor);
+
+					// store the neighbor pixel at the correct position in the shortest path sequence
+					ans[sort_map.getPixel(current) - 1] = neighbor;
+					break;
 				}
 			}
 		}
-		// If the destination pixel (p2) was visited, construct the shortest path
-		if (visited[p2.getX()][p2.getY()]) {
-			ArrayList<Pixel2D> shortest_path = new ArrayList<>();
-			Pixel2D curr = p2;
 
-			// Traverse the parent array to construct the path from p1 to p2
-			while (curr != null) {
-				shortest_path.add(curr);
-				curr = origin[curr.getX()][curr.getY()];
-			}
-
-			// Convert the path to array and reverse it
-			ans = new Pixel2D[shortest_path.size()];
-			for (int i = shortest_path.size() - 1, j = 0; i >= 0; i--, j++) {
-				ans[j] = shortest_path.get(i);
-			}
-		}
 		return ans;
 	}
-	/*
-	 * this method helps us in the shortestpath method:
-	 * method determines if a move between two pixels is valid by comparing 
-	 * their colors with the obstacle color.
-	 *  It returns true if both pixels have different colors from the obstacle color and false otherwise.
-	 */
-	private boolean validMove(Pixel2D p1, Pixel2D p2, int obsColor) {
-		int color_1 = getPixel(p1);//retrieves the color of p1
-		int color_2 = getPixel(p2);//retrieves the color of p2
 
-		//checks if both color1 and color2 are different from obsColor
-		boolean isValid = (color_1 != obsColor) && (color_2 != obsColor);
-		return isValid;
-	}
 	@Override
 	public boolean isInside(Pixel2D p) {
-		int x=p.getX();//retrieves the x-coordinate of the p pixel 
-		int y= p.getY();//retrieves the y-coordinate of the p pixel 
+		int x=p.getX();//retrieves the x-coordinate of the p pixel
+		int y= p.getY();//retrieves the y-coordinate of the p pixel
 
 		int width=getWidth();//retrieves the width of the map
 		int height = getHeight();//retrieves the height of the map
 
 		/*checks if the x-coordinate x is greater than or equal to 0, less than the width,
 		 *  the y-coordinate y is greater than or equal to 0,
-		 *  and less than the height 
+		 *  and less than the height
 		 */
 		if(x>=0&&x<width && y>=0&&y<height) {
 			return true;
@@ -249,10 +215,10 @@ public class Map implements Map2D {
 	public void setCyclic(boolean cy) {
 		this._cyclicFlag=cy;
 	}
-	@Override
 
+	@Override
 	public Map2D allDistance(Pixel2D start, int obsColor) {
-		Map2D ans = null; 
+		Map2D ans = null;
 
 		int h = getHeight();
 		int w= getWidth();
@@ -263,7 +229,7 @@ public class Map implements Map2D {
 		List<Pixel2D> pixels= new ArrayList<Pixel2D>();
 
 		// Set the distance of the start pixel to 0 in the new map.
-		ans.setPixel(start, 0); 
+		ans.setPixel(start, 0);
 
 		// Add the start pixel to the list of pixels to be processed.
 		pixels.add(start);
@@ -272,13 +238,13 @@ public class Map implements Map2D {
 		while (!pixels.isEmpty()) {
 
 			// Remove the first pixel from the list of pixels.
-			Pixel2D current_pix= pixels.remove(0);	 
+			Pixel2D current_pix= pixels.remove(0);
 
 			// Get the current distance of the pixel from the new map.
 			int current_Dis= ans.getPixel(current_pix);
 
-			// Get the neighboring 
-			Pixel2D[] neigh= getNeighbors( current_pix);
+			// Get the neighboring
+			Pixel2D[] neigh= findTheNeighbors( current_pix);
 
 			// Iterate through the neighbors
 			for (int i = 0; i < neigh.length; i++) {
@@ -293,7 +259,7 @@ public class Map implements Map2D {
 						// Update the distance of the neighbor pixel in the new map.
 						ans.setPixel(neighbor, current_Dis + 1);
 
-						// Add the neighbor pixel to the list of pixels to be processed.     
+						// Add the neighbor pixel to the list of pixels to be processed.
 						pixels.add(neighbor);
 					}
 				}
@@ -302,46 +268,24 @@ public class Map implements Map2D {
 		return ans;
 	}
 	/*
-	 * this function help us in the shortestPath and all distnce methods : 
-	 * takes a Pixel2D object and finds its neighboring
-	 *  pixels by checking the boundaries of the map.
-	 *  It returns a list of valid neighboring pixels.
+	 *this is a helper method that help us in the shortest path method and allditance
 	 */
-	private Pixel2D[] getNeighbors(Pixel2D pixel) {
-		//initializes an empty ArrayList to store the neighboring pixels.
-		List<Pixel2D> neighbors = new ArrayList<>();
+	private Pixel2D[] findTheNeighbors(Pixel2D pixel) {
+		Pixel2D[] neighbors = new Pixel2D[4];
 
+		int w=getWidth();
+		int h= getHeight();
 		int x = pixel.getX();
 		int y = pixel.getY();
-		int width = getWidth();
-		int height = getHeight();
 
-		// Check top neighbor
-		if (x > 0) {
-			neighbors.add(new Index2D(x - 1, y));
-		}
+		neighbors[3] = new Index2D(x, (y - 1 + h) % h);//left
+		neighbors[2] = new Index2D(x, (y + 1) % h);//right
+		neighbors[0] = new Index2D((x - 1 + w) % w, y);//up
+		neighbors[1] = new Index2D((x + 1) % w, y);//down
 
-		// Check bottom neighbor
-		if (x < width - 1) {
-			neighbors.add(new Index2D(x + 1, y));
-		}
 
-		// Check left neighbor
-		if (y > 0) {
-			neighbors.add(new Index2D(x, y - 1));
-		}
-
-		// Check right neighbor
-		if (y < height - 1) {
-			neighbors.add(new Index2D(x, y + 1));
-		}
-		// Convert the ArrayList to an array
-		Pixel2D[] neighborsArray = new Pixel2D[neighbors.size()];
-		neighborsArray = neighbors.toArray(neighborsArray);
-
-		return neighborsArray;
+		return neighbors;
 	}
-
 }
 
 
